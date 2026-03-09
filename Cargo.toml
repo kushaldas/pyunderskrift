@@ -11,5 +11,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 underskrift = { version = "0.1", features = ["tsp", "ltv", "visual", "verify", "blocking", "saci", "svt", "report"] }
-pyo3 = { version = "0.28.2", features = ["extension-module"] }
+pyo3 = { version = "0.28.2", features = ["extension-module", "abi3-py310"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
