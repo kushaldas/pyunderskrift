@@ -29,13 +29,18 @@ jobs:
           quay.io/pypa/manylinux_2_28_x86_64 \
           /io/build-wheels.sh
 
-    - name: Install UV
+    - name: Install UV and set up test environment
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install wheel and test dependencies
+      run: |
         uv venv
         source .venv/bin/activate
         uv pip install pytest
-        uv pip install ./dist/pyunderskrift-*.whl
+        # Install exactly the abi3 wheel (not any stale cp3XX wheels)
+        uv pip install dist/pyunderskrift-*-abi3-*.whl
 
     - name: Generate test fixtures
       run: |
