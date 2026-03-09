@@ -1,0 +1,15 @@
+[package]
+name = "pyunderskrift"
+version = "0.1.0"
+edition = "2021"
+description = "Python bindings for the underskrift PDF signing and verification library"
+license = "BSD-2-Clause"
+
+[lib]
+name = "pyunderskrift"
+crate-type = ["cdylib"]
+
+[dependencies]
+underskrift = { version = "0.1", features = ["tsp", "ltv", "visual", "verify", "blocking", "saci", "svt", "report"] }
+pyo3 = { version = "0.28.2", features = ["extension-module"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }

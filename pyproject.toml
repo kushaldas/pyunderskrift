@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "pyunderskrift"
+version = "0.1.0"
+description = "Python bindings for the underskrift PDF signing and verification library"
+requires-python = ">=3.10"
+license = "BSD-2-Clause"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security :: Cryptography",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.urls]
+Repository = "https://github.com/kushaldas/pyunderskrift"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+exclude = ["tests/**"]
