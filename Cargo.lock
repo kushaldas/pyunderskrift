@@ -1526,9 +1526,10 @@ dependencies = [
 
 [[package]]
 name = "pyunderskrift"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pyo3",
+ "serde_json",
  "tokio",
  "underskrift",
 ]
@@ -2347,9 +2348,9 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "underskrift"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d967d137309cbfe756626f02c3cd659745440f6f7cef8db0c48c450647394396"
+checksum = "9b32efc1e8f8f6257fca7e77ea90afbcfabe90607c985d808efd0edba4fa1ff7"
 dependencies = [
  "base64",
  "chrono",

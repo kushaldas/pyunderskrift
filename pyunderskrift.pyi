@@ -689,3 +689,213 @@ def finalize_signature(
         ValueError: If finalization fails or the signature was already consumed.
     """
     ...
+
+# ── PDF Inspection ────────────────────────────────────────────────────────────
+
+class ObjectKind:
+    """The kind of a PDF indirect object."""
+
+    Dictionary: ObjectKind
+    Stream: ObjectKind
+    Array: ObjectKind
+    Name: ObjectKind
+    String: ObjectKind
+    Integer: ObjectKind
+    Real: ObjectKind
+    Boolean: ObjectKind
+    Null: ObjectKind
+    Reference: ObjectKind
+
+    def as_str(self) -> str:
+        """Return the kind as a string label (e.g. ``'Dictionary'``)."""
+        ...
+
+    def __eq__(self, other: object) -> bool: ...
+    def __ne__(self, other: object) -> bool: ...
+    def __int__(self) -> int: ...
+    def __repr__(self) -> str: ...
+    def __hash__(self) -> int: ...
+
+class PdfObjectInfo:
+    """Information about a single PDF indirect object."""
+
+    @property
+    def obj_num(self) -> int:
+        """Object number."""
+        ...
+    @property
+    def gen_num(self) -> int:
+        """Generation number."""
+        ...
+    @property
+    def kind(self) -> ObjectKind:
+        """The kind of object."""
+        ...
+    @property
+    def type_name(self) -> Optional[str]:
+        """The /Type entry value (e.g. ``'/Page'``), if present."""
+        ...
+    @property
+    def subtype_name(self) -> Optional[str]:
+        """The /Subtype entry value, if present."""
+        ...
+    @property
+    def keys(self) -> list[str]:
+        """Dictionary or stream dictionary keys (e.g. ``['/Type', '/MediaBox']``)."""
+        ...
+    @property
+    def stream_length(self) -> Optional[int]:
+        """For streams, the /Length value (raw, pre-decompression)."""
+        ...
+    @property
+    def data(self) -> dict | list | str | int | float | bool | None:
+        """Recursively serialized object data as native Python types."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+class PdfInspection:
+    """Result of inspecting a PDF's full object tree."""
+
+    @property
+    def pdf_version(self) -> str:
+        """PDF version string (e.g. ``'1.7'``)."""
+        ...
+    @property
+    def num_pages(self) -> int:
+        """Number of pages."""
+        ...
+    @property
+    def num_objects(self) -> int:
+        """Total number of indirect objects."""
+        ...
+    @property
+    def objects(self) -> list[PdfObjectInfo]:
+        """All indirect objects with their metadata and serialized data."""
+        ...
+    @property
+    def catalog(self) -> dict | None:
+        """The document catalog serialized to a dict."""
+        ...
+
+    def __repr__(self) -> str: ...
+
+class CoverageInfo:
+    """ByteRange coverage information for a signature."""
+
+    signed_bytes: int
+    file_size: int
+    percentage: float
+    gap_start: int
+    gap_end: int
+    gap_size: int
+
+    def __repr__(self) -> str: ...
+
+class SignatureFieldInfo:
+    """Information about a single signature field."""
+
+    field_name: Optional[str]
+    obj_num: Optional[int]
+    filter: Optional[str]
+    sub_filter: Optional[str]
+    name: Optional[str]
+    reason: Optional[str]
+    location: Optional[str]
+    contact_info: Optional[str]
+    signing_time: Optional[str]
+    byte_range: Optional[list[int]]
+    coverage: Optional[CoverageInfo]
+    contents_length: Optional[int]
+    contents_hex_preview: Optional[str]
+    doc_mdp_permissions: Optional[int]
+    build_app_name: Optional[str]
+
+    def __repr__(self) -> str: ...
+
+class VriEntry:
+    """A VRI (Validation Related Information) entry from the DSS."""
+
+    hash_key: str
+    num_certs: int
+    num_ocsps: int
+    num_crls: int
+    certs: list[bytes]
+    ocsps: list[bytes]
+    crls: list[bytes]
+
+    def __repr__(self) -> str: ...
+
+class DssInfo:
+    """Document Security Store (DSS) information."""
+
+    obj_num: Optional[int]
+    num_certs: int
+    num_ocsps: int
+    num_crls: int
+    certs: list[bytes]
+    ocsps: list[bytes]
+    crls: list[bytes]
+    vri: list[VriEntry]
+
+    def __repr__(self) -> str: ...
+
+class RevisionInfo:
+    """A detected PDF revision (bounded by %%EOF)."""
+
+    index: int
+    eof_offset: int
+    byte_start: int
+    byte_end: int
+
+    def __repr__(self) -> str: ...
+
+class PdfSignatureInspection:
+    """Result of inspecting a PDF's signature-related structures."""
+
+    has_signatures: bool
+    num_signatures: int
+    signatures: list[SignatureFieldInfo]
+    dss: Optional[DssInfo]
+    revisions: list[RevisionInfo]
+    file_size: int
+
+    def __repr__(self) -> str: ...
+
+def inspect_pdf(pdf_data: bytes) -> PdfInspection:
+    """Inspect all objects in a PDF.
+
+    Parses the PDF from raw bytes, enumerates every indirect object,
+    classifies it, and serializes its contents to Python-native types.
+
+    Releases the GIL during inspection.
+
+    Raises:
+        ValueError: If the PDF cannot be parsed.
+    """
+    ...
+
+def inspect_signatures(pdf_data: bytes) -> PdfSignatureInspection:
+    """Inspect all signature-related data in a PDF.
+
+    Extracts signature fields, DSS (with full DER content), and revision info.
+
+    Releases the GIL during inspection.
+
+    Raises:
+        ValueError: If the PDF cannot be parsed.
+    """
+    ...
+
+def extract_cms_by_object(pdf_data: bytes, obj_num: int) -> bytes:
+    """Extract raw CMS/PKCS#7 bytes from a signature dictionary.
+
+    Given a PDF and an object number, extracts the raw /Contents bytes
+    (CMS/PKCS#7 DER data) from that signature dictionary object.
+
+    Releases the GIL during extraction.
+
+    Raises:
+        ValueError: If the object cannot be found or has no /Contents.
+    """
+    ...
