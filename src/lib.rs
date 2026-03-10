@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 mod crypto;
 mod enums;
 mod extractor;
+mod inspect;
 mod policy;
 mod remote;
 mod signer;
@@ -70,6 +71,20 @@ fn pyunderskrift(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<remote::PreparedSignature>()?;
     m.add_function(wrap_pyfunction!(remote::prepare_signature, m)?)?;
     m.add_function(wrap_pyfunction!(remote::finalize_signature, m)?)?;
+
+    // Inspect
+    m.add_class::<inspect::ObjectKind>()?;
+    m.add_class::<inspect::PdfObjectInfo>()?;
+    m.add_class::<inspect::PdfInspection>()?;
+    m.add_class::<inspect::CoverageInfo>()?;
+    m.add_class::<inspect::SignatureFieldInfo>()?;
+    m.add_class::<inspect::VriEntry>()?;
+    m.add_class::<inspect::DssInfo>()?;
+    m.add_class::<inspect::RevisionInfo>()?;
+    m.add_class::<inspect::PdfSignatureInspection>()?;
+    m.add_function(wrap_pyfunction!(inspect::inspect_pdf, m)?)?;
+    m.add_function(wrap_pyfunction!(inspect::inspect_signatures, m)?)?;
+    m.add_function(wrap_pyfunction!(inspect::extract_cms_by_object, m)?)?;
 
     Ok(())
 }

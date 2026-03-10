@@ -40,6 +40,19 @@ from pyunderskrift import (
     PreparedSignature,
     prepare_signature,
     finalize_signature,
+    # Inspect
+    ObjectKind,
+    PdfObjectInfo,
+    PdfInspection,
+    CoverageInfo,
+    SignatureFieldInfo,
+    VriEntry,
+    DssInfo,
+    RevisionInfo,
+    PdfSignatureInspection,
+    inspect_pdf,
+    inspect_signatures,
+    extract_cms_by_object,
 )
 
 
@@ -854,3 +867,174 @@ class TestPdfSigner:
         assert len(signed) > 0
         # Should start with %PDF
         assert signed[:5] == b"%PDF-"
+
+
+# ---------------------------------------------------------------------------
+# Inspect tests
+# ---------------------------------------------------------------------------
+
+
+class TestInspectPdf:
+    """Tests for inspect_pdf() and related types."""
+
+    def test_inspect_sample_pdf(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        assert isinstance(result, PdfInspection)
+        assert result.pdf_version != ""
+        assert result.num_pages > 0
+        assert result.num_objects > 0
+        assert len(result.objects) == result.num_objects
+
+    def test_object_info_fields(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        obj = result.objects[0]
+        assert isinstance(obj, PdfObjectInfo)
+        assert obj.obj_num > 0
+        assert isinstance(obj.gen_num, int)
+        assert isinstance(obj.kind, ObjectKind)
+        assert isinstance(obj.keys, list)
+
+    def test_object_data_is_python_native(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        # Find a dictionary object
+        dict_obj = next(o for o in result.objects if o.kind == ObjectKind.Dictionary)
+        data = dict_obj.data
+        assert isinstance(data, dict)
+
+    def test_object_kinds_present(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        has_dict = any(o.kind == ObjectKind.Dictionary for o in result.objects)
+        assert has_dict, "should have at least one Dictionary object"
+
+    def test_has_page_type(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        has_page = any(o.type_name == "/Page" for o in result.objects)
+        assert has_page, "should have at least one /Page object"
+
+    def test_catalog_is_dict(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        assert isinstance(result.catalog, dict)
+
+    def test_repr(self, sample_pdf):
+        result = inspect_pdf(sample_pdf)
+        r = repr(result)
+        assert "PdfInspection" in r
+        obj_r = repr(result.objects[0])
+        assert "PdfObjectInfo" in obj_r
+
+    def test_invalid_pdf(self):
+        with pytest.raises(ValueError, match="parse"):
+            inspect_pdf(b"not a pdf")
+
+
+class TestObjectKind:
+    """Tests for ObjectKind enum."""
+
+    def test_variants(self):
+        assert ObjectKind.Dictionary == ObjectKind.Dictionary
+        assert ObjectKind.Dictionary != ObjectKind.Stream
+
+    def test_as_str(self):
+        assert ObjectKind.Dictionary.as_str() == "Dictionary"
+        assert ObjectKind.Stream.as_str() == "Stream"
+        assert ObjectKind.Null.as_str() == "Null"
+
+    def test_repr(self):
+        r = repr(ObjectKind.Dictionary)
+        assert "Dictionary" in r
+
+
+class TestInspectSignatures:
+    """Tests for inspect_signatures() and related types."""
+
+    def test_unsigned_pdf(self, sample_pdf):
+        result = inspect_signatures(sample_pdf)
+        assert isinstance(result, PdfSignatureInspection)
+        assert result.has_signatures is False
+        assert result.num_signatures == 0
+        assert result.signatures == []
+        assert result.dss is None
+        assert result.file_size > 0
+
+    def test_revisions_detected(self, sample_pdf):
+        result = inspect_signatures(sample_pdf)
+        assert len(result.revisions) >= 1
+        for rev in result.revisions:
+            assert isinstance(rev, RevisionInfo)
+            assert isinstance(rev.index, int)
+            assert isinstance(rev.byte_start, int)
+            assert isinstance(rev.byte_end, int)
+
+    def test_signed_pdf(self, signer, sample_pdf):
+        """Sign a PDF then inspect its signatures."""
+        _require_fixtures()
+        signed = PdfSigner().sign(sample_pdf, signer)
+        result = inspect_signatures(signed)
+        assert result.has_signatures is True
+        assert result.num_signatures >= 1
+
+        sig = result.signatures[0]
+        assert isinstance(sig, SignatureFieldInfo)
+        assert sig.field_name is not None
+        assert sig.filter is not None
+        assert sig.sub_filter is not None
+        assert sig.byte_range is not None
+        assert sig.contents_length is not None
+        assert sig.contents_length > 0
+
+    def test_signed_pdf_coverage(self, signer, sample_pdf):
+        """Verify coverage info is computed for signed PDF."""
+        _require_fixtures()
+        signed = PdfSigner().sign(sample_pdf, signer)
+        result = inspect_signatures(signed)
+        sig = result.signatures[0]
+        assert sig.coverage is not None
+        cov = sig.coverage
+        assert isinstance(cov, CoverageInfo)
+        assert cov.signed_bytes > 0
+        assert cov.file_size > 0
+        assert 0.0 < cov.percentage <= 100.0
+        assert cov.gap_size > 0
+
+    def test_repr(self, sample_pdf):
+        result = inspect_signatures(sample_pdf)
+        r = repr(result)
+        assert "PdfSignatureInspection" in r
+
+    def test_invalid_pdf(self):
+        with pytest.raises(ValueError, match="parse"):
+            inspect_signatures(b"not a pdf")
+
+
+class TestExtractCmsByObject:
+    """Tests for extract_cms_by_object()."""
+
+    def test_extract_from_signed(self, signer, sample_pdf):
+        """Extract CMS from a signed PDF."""
+        _require_fixtures()
+        signed = PdfSigner().sign(sample_pdf, signer)
+
+        # First, find the signature object number
+        result = inspect_signatures(signed)
+        assert result.num_signatures >= 1
+        obj_num = result.signatures[0].obj_num
+        assert obj_num is not None
+
+        cms_bytes = extract_cms_by_object(signed, obj_num)
+        assert isinstance(cms_bytes, bytes)
+        assert len(cms_bytes) > 0
+        # CMS SignedData should start with SEQUENCE tag (0x30)
+        assert cms_bytes[0] == 0x30
+
+    def test_nonexistent_object(self, sample_pdf):
+        with pytest.raises(ValueError, match="not found"):
+            extract_cms_by_object(sample_pdf, 99999)
+
+    def test_object_without_contents(self, sample_pdf):
+        """Object 1 in a typical PDF has no /Contents."""
+        with pytest.raises(ValueError):
+            extract_cms_by_object(sample_pdf, 1)
+
+    def test_invalid_pdf(self):
+        with pytest.raises(ValueError, match="parse"):
+            extract_cms_by_object(b"not a pdf", 1)
