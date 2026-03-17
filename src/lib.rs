@@ -4,6 +4,7 @@
 //! exposing signature verification, signing, trust management, and policy
 //! evaluation to Python.
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 mod crypto;
@@ -15,6 +16,29 @@ mod remote;
 mod signer;
 mod trust;
 mod verify;
+
+/// Maximum PDF size accepted by the Python bindings (256 MB).
+const MAX_PDF_SIZE: usize = 256 * 1024 * 1024;
+
+/// Validate PDF input data: non-empty, within size limit, starts with %PDF-.
+pub(crate) fn validate_pdf_input(pdf_data: &[u8]) -> PyResult<()> {
+    if pdf_data.is_empty() {
+        return Err(PyValueError::new_err("PDF data is empty"));
+    }
+    if pdf_data.len() > MAX_PDF_SIZE {
+        return Err(PyValueError::new_err(format!(
+            "PDF data exceeds maximum size ({} bytes > {} bytes)",
+            pdf_data.len(),
+            MAX_PDF_SIZE
+        )));
+    }
+    if pdf_data.len() < 5 || &pdf_data[..5] != b"%PDF-" {
+        return Err(PyValueError::new_err(
+            "Data does not start with PDF header (%PDF-)",
+        ));
+    }
+    Ok(())
+}
 
 /// pyunderskrift — Python bindings for PDF signing and verification.
 #[pymodule]

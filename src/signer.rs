@@ -3,6 +3,8 @@
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
 
+use crate::validate_pdf_input;
+
 use underskrift::signer::{
     PdfSigner as RustPdfSigner,
     SigningOptions as RustSigningOptions,
@@ -189,6 +191,7 @@ impl PdfSigner {
     /// Raises:
     ///     ValueError: If signing fails.
     fn sign(&self, py: Python<'_>, pdf_data: Vec<u8>, signer: &SoftwareSigner) -> PyResult<Vec<u8>> {
+        validate_pdf_input(&pdf_data)?;
         let rust_options = self.options.to_rust();
         let signer_ref = signer.inner.clone();
 

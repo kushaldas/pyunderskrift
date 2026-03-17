@@ -923,7 +923,7 @@ class TestInspectPdf:
         assert "PdfObjectInfo" in obj_r
 
     def test_invalid_pdf(self):
-        with pytest.raises(ValueError, match="parse"):
+        with pytest.raises(ValueError, match="PDF header"):
             inspect_pdf(b"not a pdf")
 
 
@@ -1002,7 +1002,7 @@ class TestInspectSignatures:
         assert "PdfSignatureInspection" in r
 
     def test_invalid_pdf(self):
-        with pytest.raises(ValueError, match="parse"):
+        with pytest.raises(ValueError, match="PDF header"):
             inspect_signatures(b"not a pdf")
 
 
@@ -1036,5 +1036,5 @@ class TestExtractCmsByObject:
             extract_cms_by_object(sample_pdf, 1)
 
     def test_invalid_pdf(self):
-        with pytest.raises(ValueError, match="parse"):
+        with pytest.raises(ValueError, match="PDF header"):
             extract_cms_by_object(b"not a pdf", 1)

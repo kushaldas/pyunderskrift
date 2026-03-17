@@ -3,6 +3,8 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::validate_pdf_input;
+
 use underskrift::policy::SignatureValidationPolicy;
 use underskrift::verify::report::{
     SignatureVerificationResult as RustSignatureVerificationResult,
@@ -135,6 +137,7 @@ impl SignatureVerifier {
     /// Raises:
     ///     ValueError: If verification fails due to parsing errors.
     fn verify_pdf(&self, py: Python<'_>, pdf_data: Vec<u8>) -> PyResult<VerificationReport> {
+        validate_pdf_input(&pdf_data)?;
         // Clone what we need before detaching from the GIL
         let trust_stores = self.trust_stores.clone();
         let allow_online = self.allow_online;

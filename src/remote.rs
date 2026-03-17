@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
+use crate::validate_pdf_input;
+
 use underskrift::remote::{
     finalize_signature as rust_finalize_signature, prepare_signature as rust_prepare_signature,
     PreparedSignature as RustPreparedSignature, RemoteSignerInfo as RustRemoteSignerInfo,
@@ -190,6 +192,7 @@ pub fn prepare_signature(
     signer_info: &RemoteSignerInfo,
     options: &RemoteSigningOptions,
 ) -> PyResult<PreparedSignature> {
+    validate_pdf_input(&pdf_data)?;
     let rust_info = signer_info.to_rust();
     let rust_opts = options.to_rust();
 

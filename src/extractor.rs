@@ -8,6 +8,7 @@ use underskrift::verify::extractor::{
 };
 
 use crate::enums::SignatureType;
+use crate::validate_pdf_input;
 
 /// Metadata extracted from a PDF signature (without cryptographic verification).
 #[pyclass(get_all, skip_from_py_object)]
@@ -71,6 +72,7 @@ impl ExtractedSignature {
 ///     ValueError: If the PDF cannot be parsed.
 #[pyfunction]
 pub fn extract_signatures(py: Python<'_>, pdf_data: Vec<u8>) -> PyResult<Vec<ExtractedSignature>> {
+    validate_pdf_input(&pdf_data)?;
     py.detach(|| {
         let sigs = rust_extract_signatures(&pdf_data)
             .map_err(|e| PyValueError::new_err(format!("{e}")))?;

@@ -7,6 +7,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PyNone, PyString};
 
+use crate::validate_pdf_input;
+
 use underskrift::inspect::cms::extract_cms_by_object as rust_extract_cms_by_object;
 use underskrift::inspect::signatures::{
     CoverageInfo as RustCoverageInfo, RevisionInfo as RustRevisionInfo,
@@ -19,34 +21,50 @@ use underskrift::inspect::{
     SignatureFieldInfo as RustSignatureFieldInfo,
 };
 
+/// Maximum recursion depth for JSON-to-Python conversion.
+const MAX_JSON_DEPTH: usize = 64;
+
 /// Convert a serde_json::Value to a Python object.
-fn json_value_to_py<'py>(py: Python<'py>, val: &serde_json::Value) -> Bound<'py, PyAny> {
+fn json_value_to_py<'py>(
+    py: Python<'py>,
+    val: &serde_json::Value,
+    depth: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    if depth > MAX_JSON_DEPTH {
+        return Err(PyValueError::new_err(
+            "JSON nesting depth exceeds maximum (64)",
+        ));
+    }
     match val {
-        serde_json::Value::Null => PyNone::get(py).to_owned().into_any(),
-        serde_json::Value::Bool(b) => PyBool::new(py, *b).to_owned().into_any(),
+        serde_json::Value::Null => Ok(PyNone::get(py).to_owned().into_any()),
+        serde_json::Value::Bool(b) => Ok(PyBool::new(py, *b).to_owned().into_any()),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
-                i.into_pyobject(py).unwrap().into_any()
+                let obj: Bound<'py, PyAny> = i
+                    .into_pyobject(py)
+                    .map_err(|e| PyValueError::new_err(format!("int conversion failed: {e}")))?
+                    .into_any();
+                Ok(obj)
             } else if let Some(f) = n.as_f64() {
-                PyFloat::new(py, f).into_any()
+                Ok(PyFloat::new(py, f).into_any())
             } else {
-                PyNone::get(py).to_owned().into_any()
+                Ok(PyNone::get(py).to_owned().into_any())
             }
         }
-        serde_json::Value::String(s) => PyString::new(py, s).into_any(),
+        serde_json::Value::String(s) => Ok(PyString::new(py, s).into_any()),
         serde_json::Value::Array(arr) => {
             let list = PyList::empty(py);
             for item in arr {
-                list.append(json_value_to_py(py, item)).unwrap();
+                list.append(json_value_to_py(py, item, depth + 1)?)?;
             }
-            list.into_any()
+            Ok(list.into_any())
         }
         serde_json::Value::Object(map) => {
             let dict = PyDict::new(py);
             for (k, v) in map {
-                dict.set_item(k, json_value_to_py(py, v)).unwrap();
+                dict.set_item(k, json_value_to_py(py, v, depth + 1)?)?;
             }
-            dict.into_any()
+            Ok(dict.into_any())
         }
     }
 }
@@ -201,8 +219,8 @@ impl PdfObjectInfo {
     }
 
     #[getter]
-    fn data<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
-        json_value_to_py(py, &self.data_json)
+    fn data<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        json_value_to_py(py, &self.data_json, 0)
     }
 
     fn __repr__(&self) -> String {
@@ -263,8 +281,8 @@ impl PdfInspection {
     }
 
     #[getter]
-    fn catalog<'py>(&self, py: Python<'py>) -> Bound<'py, PyAny> {
-        json_value_to_py(py, &self.catalog_json)
+    fn catalog<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        json_value_to_py(py, &self.catalog_json, 0)
     }
 
     fn __repr__(&self) -> String {
@@ -587,6 +605,7 @@ impl PdfSignatureInspection {
 ///     ValueError: If the PDF cannot be parsed.
 #[pyfunction]
 pub fn inspect_pdf(py: Python<'_>, pdf_data: Vec<u8>) -> PyResult<PdfInspection> {
+    validate_pdf_input(&pdf_data)?;
     // Run the Rust inspection with GIL released, then convert to Python types
     let result = py.detach(|| {
         rust_inspect_pdf(&pdf_data).map_err(|e| PyValueError::new_err(format!("{e}")))
@@ -608,6 +627,7 @@ pub fn inspect_pdf(py: Python<'_>, pdf_data: Vec<u8>) -> PyResult<PdfInspection>
 ///     ValueError: If the PDF cannot be parsed.
 #[pyfunction]
 pub fn inspect_signatures(py: Python<'_>, pdf_data: Vec<u8>) -> PyResult<PdfSignatureInspection> {
+    validate_pdf_input(&pdf_data)?;
     let result = py.detach(|| {
         rust_inspect_signatures(&pdf_data).map_err(|e| PyValueError::new_err(format!("{e}")))
     })?;
@@ -627,6 +647,7 @@ pub fn inspect_signatures(py: Python<'_>, pdf_data: Vec<u8>) -> PyResult<PdfSign
 ///     ValueError: If the object cannot be found or has no /Contents.
 #[pyfunction]
 pub fn extract_cms_by_object(py: Python<'_>, pdf_data: Vec<u8>, obj_num: u32) -> PyResult<Vec<u8>> {
+    validate_pdf_input(&pdf_data)?;
     py.detach(|| {
         rust_extract_cms_by_object(&pdf_data, obj_num)
             .map_err(|e| PyValueError::new_err(format!("{e}")))
